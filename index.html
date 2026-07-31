@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFF4EA">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='38' cy='50' r='26' fill='%230FA697'/%3E%3Ccircle cx='64' cy='50' r='26' fill='%23FF7A59'/%3E%3C/svg%3E">
+<title>Разговор — игра на двоих</title>
+<style>
+/* ─────────────────────────────────────────────
+   Разговор — игра на двоих.
+   Вопрос это карточка. У каждого свой цвет.
+   Чья очередь — видно по значку, который надувается.
+   ───────────────────────────────────────────── */
+:root{
+  --bg:#FFF4EA;
+  --bg-2:#FFE9DC;
+  --surface:#FFFFFF;
+  --ink:#2E2A40;
+  --muted:#7C7492;
+  --line:rgba(46,42,64,.12);
+  --he:#0FA697;          /* муж — бирюзовый */
+  --she:#FF7A59;         /* жена — коралловый */
+  --both:#7B5CFF;        /* вместе — фиолетовый */
+  --sun:#FFC53D;
+  --now:var(--both);
+  --shadow:0 10px 30px rgba(46,42,64,.10),0 2px 6px rgba(46,42,64,.06);
+  --font:ui-rounded,"SF Pro Rounded","Nunito","Varela Round",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --pad:clamp(18px,5vw,40px);
+  --r:24px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#241F38; --bg-2:#2E2748; --surface:#332C4E;
+    --ink:#F6F2FF; --muted:#ABA2C9; --line:rgba(246,242,255,.14);
+    --he:#2FD9C4; --she:#FF9C7D; --both:#A98BFF; --sun:#FFD666;
+    --shadow:0 12px 34px rgba(0,0,0,.30),0 2px 6px rgba(0,0,0,.20);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#241F38; --bg-2:#2E2748; --surface:#332C4E;
+  --ink:#F6F2FF; --muted:#ABA2C9; --line:rgba(246,242,255,.14);
+  --he:#2FD9C4; --she:#FF9C7D; --both:#A98BFF; --sun:#FFD666;
+  --shadow:0 12px 34px rgba(0,0,0,.30),0 2px 6px rgba(0,0,0,.20);
+}
+:root[data-theme="light"]{
+  --bg:#FFF4EA; --bg-2:#FFE9DC; --surface:#FFFFFF;
+  --ink:#2E2A40; --muted:#7C7492; --line:rgba(46,42,64,.12);
+  --he:#0FA697; --she:#FF7A59; --both:#7B5CFF; --sun:#FFC53D;
+  --shadow:0 10px 30px rgba(46,42,64,.10),0 2px 6px rgba(46,42,64,.06);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--font);
+  -webkit-font-smoothing:antialiased;overscroll-behavior:none;
+}
+@media (max-width:360px){:root{--pad:15px;--r:20px}}
+
+/* мягкие пятна на фоне — настроение, а не декор ради декора */
+#blobs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+#blobs i{
+  position:absolute;border-radius:50%;filter:blur(64px);opacity:.28;
+  transition:background 1s ease,transform 1.2s cubic-bezier(.34,1.3,.5,1);
+}
+#blobs .b1{width:52vmax;height:52vmax;left:-18vmax;top:-20vmax;background:var(--he)}
+#blobs .b2{width:46vmax;height:46vmax;right:-16vmax;bottom:-18vmax;background:var(--she)}
+#blobs .b3{width:34vmax;height:34vmax;left:35%;top:45%;background:var(--sun);opacity:.2}
+#app{position:relative;z-index:1;height:100dvh}
+
+.screen{
+  position:absolute;inset:0;display:none;flex-direction:column;
+  padding:max(12px,env(safe-area-inset-top)) var(--pad) max(14px,env(safe-area-inset-bottom));
+}
+.screen.on{display:flex;animation:pop .45s cubic-bezier(.34,1.25,.5,1) both}
+@keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+
+/* ── общее ─────────────────────────────────── */
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.q{font-size:clamp(25px,6vw,34px);line-height:1.28;font-weight:800;letter-spacing:-.015em;text-wrap:balance}
+.q em{font-style:normal;color:var(--now);white-space:nowrap}
+.hint{margin-top:14px;font-size:clamp(14px,2vw,16.5px);line-height:1.55;color:var(--muted);font-weight:500;max-width:44ch}
+
+.btn{
+  font:inherit;font-size:16px;font-weight:700;color:var(--ink);cursor:pointer;
+  background:var(--surface);border:0;border-radius:999px;padding:15px 26px;
+  box-shadow:0 4px 0 var(--line),var(--shadow);transition:transform .12s,box-shadow .12s;
+}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
+.btn.solid{background:var(--both);color:#fff;box-shadow:0 4px 0 color-mix(in srgb,var(--both) 62%,#000),var(--shadow)}
+.btn.solid:active{box-shadow:0 1px 0 color-mix(in srgb,var(--both) 62%,#000)}
+:focus-visible{outline:3px solid var(--now);outline-offset:3px}
+
+.start{margin:clamp(22px,4vh,32px) 0 4px;display:flex;flex-wrap:wrap;gap:12px}
+.toggles{display:flex;flex-wrap:wrap;gap:9px;margin:20px 0 4px}
+.chip{
+  font:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;
+  background:transparent;border:2px solid var(--line);border-radius:999px;padding:9px 15px;
+  display:inline-flex;align-items:center;gap:8px;transition:.18s;
+}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--line);transition:.18s}
+.chip[aria-pressed="true"]{color:var(--ink);border-color:var(--both);background:color-mix(in srgb,var(--both) 10%,transparent)}
+.chip[aria-pressed="true"] .dot{background:var(--both)}
+
+/* ── главная ───────────────────────────────── */
+#home{overflow-y:auto;scrollbar-width:none}
+#home::-webkit-scrollbar{display:none}
+.home-top{padding:clamp(20px,6vh,54px) 0 6px;max-width:46ch}
+.mark{display:flex;align-items:center;margin-bottom:16px}
+.mark i{
+  width:34px;height:34px;border-radius:50%;display:block;
+  animation:bob 3.4s ease-in-out infinite;
+}
+.mark i:first-child{background:var(--he)}
+.mark i:last-child{background:var(--she);margin-left:-13px;animation-delay:.5s}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.wordmark{font-size:clamp(38px,10vw,60px);font-weight:800;line-height:1.02;letter-spacing:-.035em}
+.wordmark span{display:block;font-size:.32em;font-weight:700;color:var(--muted);letter-spacing:-.01em;margin-top:.55em}
+.home-lead{margin-top:16px;font-size:16.5px;line-height:1.6;color:var(--muted);font-weight:500;max-width:42ch}
+
+/* список тем — как выбор уровня */
+.list{display:grid;gap:12px;margin:clamp(22px,4vh,34px) 0 44px}
+@media (min-width:680px){.list{grid-template-columns:1fr 1fr}}
+.topic{
+  font:inherit;text-align:left;cursor:pointer;color:var(--ink);
+  background:var(--surface);border:0;border-radius:var(--r);padding:17px 18px;
+  display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;
+  box-shadow:var(--shadow);transition:transform .15s,box-shadow .15s;
+}
+.topic:hover{transform:translateY(-3px)}
+.topic:active{transform:translateY(0)}
+.topic .n{
+  width:38px;height:38px;border-radius:13px;display:grid;place-items:center;
+  font-size:15px;font-weight:800;color:#fff;background:var(--both);
+  font-variant-numeric:tabular-nums;
+}
+.topic:nth-child(3n+1) .n{background:var(--he)}
+.topic:nth-child(3n+2) .n{background:var(--she)}
+.topic .t{font-size:17.5px;font-weight:800;line-height:1.25;letter-spacing:-.01em}
+.topic .s{display:block;font-size:13.5px;font-weight:500;color:var(--muted);margin-top:5px;line-height:1.45}
+.topic .m{display:inline-block;margin-top:9px;font-size:11.5px;font-weight:700;color:var(--muted);
+  background:var(--bg-2);border-radius:999px;padding:4px 10px}
+.topic.done{opacity:.72}
+.topic.done .n{background:var(--muted)}
+.topic.done .m::after{content:" · пройдена ✓"}
+
+/* дополнительные темы — визуально второй ряд, не основной курс */
+.section-head{max-width:44ch;padding-top:clamp(10px,2vh,20px);border-top:2px solid var(--line)}
+.section-head h2{font-size:20px;font-weight:800;letter-spacing:-.015em}
+.section-head p{margin-top:7px;font-size:14.5px;line-height:1.5;font-weight:500;color:var(--muted)}
+.topic.extra{background:color-mix(in srgb,var(--surface) 62%,transparent);box-shadow:none;border:2px solid var(--line)}
+.topic.extra:hover{background:var(--surface);box-shadow:var(--shadow)}
+.topic.extra .n{background:transparent;color:var(--muted);border:2px solid var(--line)}
+.topic.extra .t{font-size:16.5px}
+.m.flag{background:color-mix(in srgb,var(--sun) 32%,transparent);color:var(--ink);margin-left:6px}
+.flag-note{display:block;margin-top:12px;font-size:13.5px;font-weight:700;line-height:1.45;
+  color:var(--ink);background:color-mix(in srgb,var(--sun) 30%,transparent);
+  border-radius:12px;padding:9px 12px}
+
+/* ── правила ───────────────────────────────── */
+#rules{overflow-y:auto}
+.rules-wrap{max-width:46ch;margin:auto;padding:clamp(16px,4vh,44px) 0}
+.rules-list{display:grid;gap:10px;margin:22px 0}
+.rule{
+  display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:center;
+  background:var(--surface);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);
+}
+.rule b{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;
+  font-size:13px;font-weight:800;color:#fff;background:var(--both)}
+.rule:nth-child(3n+1) b{background:var(--he)}
+.rule:nth-child(3n+2) b{background:var(--she)}
+.rule p{font-size:15px;line-height:1.45;font-weight:600}
+
+/* ── сессия ────────────────────────────────── */
+#session{display:none}
+#session.on{display:grid;grid-template-rows:auto auto 1fr auto auto;grid-template-columns:minmax(0,1fr);gap:10px}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.icon{
+  font:inherit;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;
+  background:transparent;border:0;border-radius:999px;padding:10px 12px;white-space:nowrap;transition:.18s;
+}
+.icon:hover{color:var(--ink);background:var(--surface)}
+.crumb{flex:1;min-width:0;text-align:center;font-size:12.5px;font-weight:700;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* значки игроков — главный элемент: сразу видно, чья очередь */
+.players{display:flex;justify-content:center;gap:10px}
+.player{
+  display:flex;align-items:center;gap:8px;border-radius:999px;padding:9px 17px;
+  font-size:14px;font-weight:800;color:var(--muted);background:var(--surface);
+  box-shadow:0 2px 8px rgba(46,42,64,.07);
+  transform:scale(.9);opacity:.55;transition:all .45s cubic-bezier(.34,1.4,.5,1);
+}
+.player::before{content:"";width:10px;height:10px;border-radius:50%;background:currentColor;transition:.3s}
+.player.he.on{color:#fff;background:var(--he);opacity:1;transform:scale(1.06);animation:nudge 2.6s ease-in-out infinite}
+.player.she.on{color:#fff;background:var(--she);opacity:1;transform:scale(1.06);animation:nudge 2.6s ease-in-out infinite .3s}
+.player.on::before{background:rgba(255,255,255,.9)}
+@keyframes nudge{0%,100%{transform:scale(1.06) translateY(0)}50%{transform:scale(1.06) translateY(-4px)}}
+
+/* карточка вопроса */
+.stage{display:flex;align-items:center;justify-content:center;min-height:0;padding:2px 0}
+.card{
+  position:relative;width:100%;max-width:min(100%,34rem);max-height:100%;overflow-y:auto;scrollbar-width:none;
+  background:var(--surface);border-radius:var(--r);padding:clamp(22px,4.5vw,30px);
+  min-height:min(38vh,320px);display:flex;flex-direction:column;justify-content:center;
+  box-shadow:var(--shadow);
+  animation:deal .5s cubic-bezier(.34,1.28,.5,1) both;
+}
+.card::-webkit-scrollbar{display:none}
+.card.wide{max-width:min(100%,42rem)}
+.card{border-top:6px solid var(--now);transition:border-color .5s}
+.stage[data-side="he"] .card{animation-name:deal-l}
+.stage[data-side="she"] .card{animation-name:deal-r}
+@keyframes deal{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes deal-l{from{opacity:0;transform:translateX(-26px) rotate(-3deg)}to{opacity:1;transform:none}}
+@keyframes deal-r{from{opacity:0;transform:translateX(26px) rotate(3deg)}to{opacity:1;transform:none}}
+.who{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;font-weight:800;color:var(--now);margin-bottom:12px}
+
+/* точки прогресса */
+.pips{display:flex;justify-content:center;flex-wrap:wrap;gap:5px;padding:2px 0}
+.pips i{width:7px;height:7px;border-radius:50%;background:var(--line);transition:.3s}
+.pips i.past{background:var(--muted);opacity:.5}
+.pips i.now{width:22px;border-radius:999px;background:var(--now)}
+
+/* управление */
+.controls{display:flex;align-items:center;justify-content:space-between;gap:10px;max-width:400px;width:100%;margin:0 auto}
+.ctl{
+  font:inherit;font-size:20px;font-weight:800;color:var(--muted);cursor:pointer;
+  background:var(--surface);border:0;width:54px;height:54px;border-radius:19px;flex:none;
+  box-shadow:0 4px 0 var(--line),var(--shadow);transition:transform .12s,box-shadow .12s,color .2s;
+}
+.ctl:hover{color:var(--ink)}
+.ctl:active{transform:translateY(3px);box-shadow:0 1px 0 var(--line)}
+.dial{
+  width:clamp(104px,27vw,122px);height:clamp(104px,27vw,122px);border-radius:50%;flex:none;
+  background:var(--surface);border:0;cursor:pointer;position:relative;display:grid;place-items:center;
+  color:var(--ink);font:inherit;box-shadow:var(--shadow);transition:transform .14s;
+}
+.dial:active{transform:scale(.96)}
+.dial svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.dial .track{fill:none;stroke:var(--line);stroke-width:9}
+.dial .run{fill:none;stroke:var(--now);stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .35s linear,stroke .5s}
+.dial .stack{display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1}
+.dial .time{font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.dial .lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+.dial.paused .run{stroke:var(--muted)}
+.dial.over .run,.dial.over .track{stroke:var(--sun)}
+.dial.over{animation:ring .55s ease-in-out 4}
+.dial.over .time,.dial.over .lbl{color:color-mix(in srgb,var(--sun) 75%,var(--ink))}
+@keyframes ring{0%,100%{transform:rotate(0)}25%{transform:rotate(-4deg)}75%{transform:rotate(4deg)}}
+
+.mic{text-align:center;font-size:11px;font-weight:600;color:var(--muted);opacity:.8;padding-bottom:2px}
+
+/* ── финал ─────────────────────────────────── */
+#done{justify-content:center}
+.done-wrap{max-width:34ch;margin:auto;background:var(--surface);border-radius:var(--r);
+  padding:clamp(24px,5vw,34px);box-shadow:var(--shadow)}
+.confetti{display:flex;gap:7px;margin-bottom:16px}
+.confetti i{width:13px;height:13px;border-radius:4px;animation:bob 2.4s ease-in-out infinite}
+.confetti i:nth-child(1){background:var(--he)}
+.confetti i:nth-child(2){background:var(--sun);animation-delay:.2s}
+.confetti i:nth-child(3){background:var(--she);animation-delay:.4s}
+.confetti i:nth-child(4){background:var(--both);animation-delay:.6s}
+.done-text{margin-top:14px;font-size:16px;line-height:1.55;font-weight:500;color:var(--muted)}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.15s!important}
+}
+@media (min-width:900px){
+  .card{max-width:min(100%,36rem);padding:38px 40px;min-height:min(38vh,320px)}
+  .card.wide{max-width:min(100%,44rem)}
+  .stage[data-side="he"] .card{margin-right:9vw}
+  .stage[data-side="she"] .card{margin-left:9vw}
+}
+</style>
+</head>
+<body>
+<div id="blobs"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+
+<div id="app">
+
+  <!-- ── ГЛАВНАЯ ───────────────────────────── -->
+  <main id="home" class="screen on">
+    <div class="home-top">
+      <div class="mark"><i></i><i></i></div>
+      <h1 class="wordmark">Разговор<span>игра на двоих, двенадцать вечеров</span></h1>
+      <p class="home-lead">
+        По одному вопросу на карточке. Приложение показывает, чья очередь говорить,
+        и держит время. Вопрос вслух читаете вы — писать не нужно ничего.
+      </p>
+      <div class="start">
+        <button class="btn solid" id="goStart">Начать</button>
+        <button class="btn" id="goResume" hidden>Продолжить</button>
+        <button class="btn" id="goRules">Правила</button>
+      </div>
+      <div class="toggles">
+        <button class="chip" id="tgAuto" aria-pressed="true"><i class="dot"></i><span>Без рук: сам переключается</span></button>
+        <button class="chip" id="tgVoice" aria-pressed="false" hidden><i class="dot"></i><span>Голосовые команды</span></button>
+      </div>
+    </div>
+    <nav class="list" id="topicList" aria-label="Основной курс"></nav>
+
+    <div class="section-head">
+      <h2>Дополнительные темы</h2>
+      <p>Не обязательные. Берите их после основных — или раньше, если тема стала важна именно сейчас.</p>
+    </div>
+    <nav class="list" id="extraList" aria-label="Дополнительные темы"></nav>
+  </main>
+
+  <!-- ── ПРАВИЛА ───────────────────────────── -->
+  <main id="rules" class="screen">
+    <div class="rules-wrap">
+      <p class="eyebrow">перед началом</p>
+      <h2 class="q" style="margin-top:12px">Восемь правил, <em>без которых не работает</em></h2>
+      <div class="rules-list" id="rulesList"></div>
+      <div class="start">
+        <button class="btn solid" id="rulesOk">Понятно, начинаем</button>
+        <button class="btn" id="rulesBack">Назад</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── СЕССИЯ ────────────────────────────── -->
+  <main id="session" class="screen">
+    <header class="bar">
+      <button class="icon" id="btnExit">← темы</button>
+      <p class="crumb" id="crumb"></p>
+      <button class="icon" id="btnRepeat" aria-label="Сбросить время вопроса">↻ время</button>
+    </header>
+
+    <div class="players" aria-hidden="true">
+      <span class="player he" id="pHe">Муж</span>
+      <span class="player she" id="pShe">Жена</span>
+    </div>
+
+    <section class="stage" id="stage">
+      <article class="card" id="stageIn">
+        <p class="who" id="who"></p>
+        <p class="q" id="question"></p>
+        <p class="hint" id="hint"></p>
+      </article>
+    </section>
+
+    <div class="pips" id="pips" aria-hidden="true"></div>
+
+    <footer class="controls">
+      <button class="ctl" id="btnBack" aria-label="Предыдущий вопрос">←</button>
+      <button class="dial" id="dial" aria-label="Пауза">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="track" cx="60" cy="60" r="52"></circle>
+          <circle class="run" id="run" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <span class="stack">
+          <span class="time" id="time">—</span>
+          <span class="lbl" id="dialLbl">пауза</span>
+        </span>
+      </button>
+      <button class="ctl" id="btnNext" aria-label="Следующий вопрос">→</button>
+    </footer>
+    <p class="mic" id="micHint" hidden>слушаю: «дальше» · «назад» · «повтори» · «пауза»</p>
+  </main>
+
+  <!-- ── КОНЕЦ ─────────────────────────────── -->
+  <main id="done" class="screen">
+    <div class="done-wrap">
+      <div class="confetti"><i></i><i></i><i></i><i></i></div>
+      <p class="eyebrow" id="doneEyebrow">тема пройдена</p>
+      <h2 class="q" style="margin-top:10px" id="doneTitle"></h2>
+      <p class="done-text" id="doneText"></p>
+      <div class="start">
+        <button class="btn solid" id="doneNext">Следующая тема</button>
+        <button class="btn" id="doneHome">К темам</button>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════
+   СОДЕРЖАНИЕ
+   {а|б} — вариант для мужа | для жены
+   ══════════════════════════════════════════════ */
+const RULES = [
+  "Один говорит — второй молчит. Не перебивать, даже если очень хочется.",
+  "Говорим только про себя: «я чувствую», «мне важно». Без «ты всегда» и «ты никогда».",
+  "Не разбираем старые обиды. Договариваемся о правилах на будущее.",
+  "Слушающий не защищается. Его задача — понять, а не ответить.",
+  "После тяжёлого ответа слушающий пересказывает своими словами, что услышал.",
+  "Любой может сказать «пауза». Это не побег, это уважение.",
+  "Один вечер — одна тема. Не больше сорока минут за раз.",
+  "Ничего не записываем. Всё сказанное остаётся между вами."
+];
+
+const TOPICS = [
+{ title:"Где мы сейчас", sub:"Честность о настоящем — до всех планов",
+  why:"Начинаем не с планов, а с честности. Пока не сказано, что болит сейчас, всё остальное будет разговором про других людей.",
+  steps:[
+  {t:"ask",who:"each",sec:180,after:"mirror",q:"Что для тебя сейчас самое тяжёлое в наших отношениях?",hint:"Назови одну вещь — самую главную. Не список."},
+  {t:"ask",who:"each",sec:120,q:"Что делает тебя счастлив{ым|ой} рядом со мной?"},
+  {t:"ask",who:"each",sec:150,q:"Вспомни момент, когда ты чувствовал{|а} себя ближе всего ко мне.",hint:"Опиши его подробно: где это было, что происходило, что ты чувствовал{|а}."},
+  {t:"ask",who:"each",sec:150,q:"В какой момент ты начал{|а} чувствовать, что мы отдаляемся?"},
+  {t:"ask",who:"each",sec:120,q:"Что из наших отношений ты хочешь вернуть?"},
+  {t:"seal"}]},
+
+{ title:"Что меня наполняет", sub:"Из чего каждый берёт силы",
+  why:"Это разговор не про то, что должен делать супруг. Это про то, из чего каждый из вас берёт силы. Здесь нет неправильных ответов — ни у кого.",
+  steps:[
+  {t:"ask",who:"each",sec:120,q:"Что даёт тебе силы?"},
+  {t:"ask",who:"each",sec:120,q:"Что приносит тебе радость просто так, без причины?"},
+  {t:"ask",who:"each",sec:150,q:"Когда ты последний раз чувствовал{|а} себя по-настоящему жив{ым|ой}?",hint:"Что тогда происходило? Кто был рядом?"},
+  {t:"ask",who:"each",sec:120,q:"Что тебе нужно, чтобы восстановиться, когда ты пуст{ой|ая}?"},
+  {t:"ask",who:"each",sec:120,after:"mirror",q:"Что наполняет тебя, но чего в твоей жизни сейчас почти нет?"},
+  {t:"seal"}]},
+
+{ title:"Что меня разрушает", sub:"Только про себя, без единого «ты всегда»",
+  why:"Самая важная тема и самая опасная. Правило одно: говорим только про себя. Ни одного «ты всегда» и ни одного «ты никогда».",
+  steps:[
+  {t:"ask",who:"each",sec:90,q:"Закончи фразу: <em>мне становится очень тяжело, когда…</em>"},
+  {t:"ask",who:"each",sec:90,q:"Закончи фразу: <em>я чувствую одиночество, когда…</em>"},
+  {t:"ask",who:"each",sec:90,q:"Закончи фразу: <em>я чувствую себя нелюбим{ым|ой}, когда…</em>"},
+  {t:"ask",who:"each",sec:90,q:"Закончи фразу: <em>я замолкаю, когда…</em>"},
+  {t:"ask",who:"each",sec:150,after:"mirror",afterSec:120,q:"Назови три вещи, которые нельзя делать со мной никогда.",hint:"Например: не вспоминать старое через годы, не сравнивать с другими, не говорить об этом при людях."},
+  {t:"seal"}]},
+
+{ title:"Понимаю ли я тебя", sub:"Проверка ожиданий, о которых не говорили вслух",
+  why:"Половина конфликтов — это не разные ценности. Это разные ожидания, о которых никто не сказал вслух.",
+  steps:[
+  {t:"ask",who:"each",sec:150,after:"check",q:"Скажи три раза: <em>я думаю, что тебе важно…</em>",hint:"Три вещи, которые, как тебе кажется, важны твоему супругу. Второй пока молчит."},
+  {t:"ask",who:"each",sec:150,q:"Чего ты ждёшь от меня в браке?",hint:"Назови три конкретных действия, а не качества. Не «быть внимательнее», а что именно делать."},
+  {t:"ask",who:"both",sec:150,q:"Что для нас значит быть одной командой?",hint:"Приведите пример из последнего месяца, когда вы были командой. И пример, когда не были."},
+  {t:"seal"}]},
+
+{ title:"Любовь и уважение", sub:"Расшифровка двух слов, которые все понимают по-своему",
+  why:"Люди говорят «ты меня не любишь» и «ты меня не уважаешь», вкладывая в это совершенно разные вещи. Сегодня вы это расшифруете.",
+  steps:[
+  {t:"say",text:"Пять способов чувствовать любовь: слова, время вдвоём, помощь и дела, подарки, прикосновения. Держите их в голове."},
+  {t:"ask",who:"each",sec:120,q:"Через что ты чувствуешь, что тебя любят?",hint:"Слова · время вдвоём · помощь и дела · подарки · прикосновения. Выбери и объясни почему."},
+  {t:"ask",who:"each",sec:120,q:"А через что ты {сам|сама} проявляешь любовь?",hint:"Часто это совсем не то же самое, что человеку нужно самому."},
+  {t:"ask",who:"each",sec:120,q:"Когда ты чувствуешь, что я тебя люблю?",hint:"Назови конкретный случай, а не общее описание."},
+  {t:"ask",who:"each",sec:150,q:"Что я делаю такого, после чего тебе становится одиноко?"},
+  {t:"ask",who:"each",sec:90,q:"Закончи фразу: <em>я чувствую уважение, когда…</em>"},
+  {t:"ask",who:"each",sec:90,q:"Закончи фразу: <em>я чувствую неуважение, когда…</em>"},
+  {t:"ask",who:"each",sec:90,q:"Что мне делать чаще?",hint:"Одна вещь. Простая. Такая, которую можно сделать уже завтра."},
+  {t:"seal"}]},
+
+{ title:"Как мы ссоримся и как миримся", sub:"Алгоритм на четыре случая",
+  why:"Ссоры будут всегда. Разница между семьями не в том, ссорятся ли они, а в том, есть ли у них правила.",
+  steps:[
+  {t:"ask",who:"each",sec:120,q:"Что происходит внутри тебя, когда ты злишься?",hint:"Опиши телом: что сжимается, где горячо, чего хочется сделать."},
+  {t:"ask",who:"each",sec:120,q:"Что происходит внутри, когда тебя критикуют?"},
+  {t:"ask",who:"each",sec:150,q:"Как выглядит поддержка? А как выглядит нападение?",hint:"Приведи пример каждого — из ваших, не из книжек."},
+  {t:"say",text:"Теперь договоритесь об алгоритме. Вот четыре правила — обсудите каждое и скажите вслух: принимаем или меняем. Первое: если кто-то повышает голос, второй говорит слово «пауза», и разговор останавливается на двадцать минут. Не уходит из дома — останавливается. Второе: если один закрывается и молчит, второй не преследует вопросами, а говорит: «я рядом, скажи, когда сможешь». Третье: если один плачет — сначала обнять, потом говорить. Четвёртое: если разговор зашёл в тупик, откладываем тему на завтра, а не добиваем сегодня."},
+  {t:"ask",who:"both",sec:240,q:"Обсудите эти четыре правила и произнесите вслух свою версию.",hint:"Меняйте формулировки как хотите. Важно, чтобы вы оба сказали «да» вслух."},
+  {t:"ask",who:"each",sec:150,q:"Что для тебя означает «я тебя простил{|а}»? А что означает «я снова тебе доверяю»?",hint:"Это разные вещи. Между ними обычно проходит время."},
+  {t:"ask",who:"each",sec:90,q:"Как ты понимаешь, что тебя действительно простили?",hint:"По каким признакам? Что должно произойти?"},
+  {t:"ask",who:"each",sec:90,q:"Как звучит извинение, которое ты принимаешь?",hint:"Произнеси его вслух — так, как хотел{|а} бы услышать."},
+  {t:"seal"}]},
+
+{ title:"Границы нашей семьи", sub:"Не обиды, а правила",
+  why:"Здесь не обсуждаем конкретные обиды и не называем имён. Здесь создаём правила.",
+  steps:[
+  {t:"ask",who:"each",sec:150,q:"После свадьбы кто стал твоей главной семьёй?",hint:"Не по закону и не по богословию. Практически — в обычный вторник. Что это значит в действиях?"},
+  {t:"ask",who:"both",sec:180,q:"Когда интересы родителей расходятся с интересами нашей семьи — как мы принимаем решение?",hint:"Опишите порядок действий: кто с кем говорит первым, кто решает."},
+  {t:"ask",who:"both",sec:120,q:"Кто принимает решения о детях?",hint:"Что решаем только вдвоём, а что каждый может решить сам."},
+  {t:"ask",who:"each",sec:120,q:"Что родители могут советовать — и в какой момент совет превращается в давление?",hint:"Назови признак, по которому это видно."},
+  {t:"ask",who:"each",sec:150,q:"Скажи вслух, дословно: что ты сделаешь и что скажешь, если на {твою жену|твоего мужа} будет давление со стороны твоих родных.",hint:"Не «я разберусь». Какие именно слова ты произнесёшь и кому."},
+  {t:"ask",who:"each",sec:150,q:"А теперь: как ты будешь уважать родителей {жены|мужа} и при этом не позволять нарушать свои границы?",hint:"Какие слова ты скажешь им в лицо — и какие только {жене|мужу} наедине."},
+  {t:"ask",who:"each",sec:120,q:"Если {жена просит|муж просит} тебя поговорить с твоей сестрой или мамой — что ты делаешь?",hint:"Когда ты {обязан|обязана} вмешаться, а когда нет?"},
+  {t:"ask",who:"both",sec:150,q:"Если при родственниках одному из нас сделали замечание — как поступает второй?",hint:"Что говорится вслух при всех, а что потом наедине. Договоритесь."},
+  {t:"ask",who:"both",sec:120,q:"Правила поездок к родителям: как часто, что обязательно, что необязательно.",hint:"Назовите конкретные цифры вслух."},
+  {t:"seal"}]},
+
+{ title:"Принцип или привычка", sub:"Где заканчивается своё и начинается чужое",
+  why:"Иногда человек всю жизнь защищает не свои убеждения, а традиции своей семьи. Этот разговор помогает отделить одно от другого.",
+  steps:[
+  {t:"ask",who:"each",sec:150,q:"Назови три вещи, которые для тебя принцип.",hint:"То, что ты не поменяешь никогда — чем бы это ни грозило."},
+  {t:"ask",who:"each",sec:150,q:"А теперь три вещи, которые ты считал{|а} принципом, но, если честно, это привычка твоей семьи."},
+  {t:"ask",who:"each",sec:180,q:"Возьми каждое своё «нельзя» и разложи по трём полкам.",hint:"Полка первая — это из Библии. Вторая — это из традиции нашей церкви. Третья — это из привычек моей семьи. Вслух, по каждому."},
+  {t:"ask",who:"both",sec:180,q:"Возьмите три спорных пункта и по каждому скажите: для меня это принцип или это компромисс?",hint:"Например: украшения, одежда, танцы, как часто видеться с роднёй, как воспитывать детей."},
+  {t:"say",text:"А теперь главный вопрос сегодняшнего вечера. Не торопитесь с ответом."},
+  {t:"ask",who:"each",sec:240,after:"mirror",afterSec:120,q:"Если бы не существовало ожиданий родителей, родственников и церкви — <em>какой ты хочешь видеть нашу семью?</em>",hint:"Отвечает каждый, отдельно. Второй молчит до самого конца."},
+  {t:"seal"}]},
+
+{ title:"Быт, деньги и служение", sub:"Про справедливость, а не про посуду",
+  why:"Усталость редко бывает про посуду. Обычно она про справедливость и про то, есть ли у человека право на отдых.",
+  steps:[
+  {t:"ask",who:"each",sec:120,q:"Что для тебя значит «служить друг другу»?",hint:"Приведи пример из вашей жизни."},
+  {t:"ask",who:"each",sec:150,q:"Где заканчивается жертвенность и начинается использование человека?",hint:"Где для тебя проходит эта граница?"},
+  {t:"ask",who:"both",sec:150,q:"Кто заботится о жене? Кто заботится о муже?",hint:"Ответьте честно: кто это делает сейчас — а не кто должен."},
+  {t:"ask",who:"each",sec:120,q:"Когда ты чувствуешь себя финансово спокойно?",hint:"Дело не в сумме. Дело в ощущении безопасности."},
+  {t:"ask",who:"both",sec:180,q:"С какой суммы решаем вдвоём? Есть ли у каждого право потратить на себя без отчёта?",hint:"Назовите конкретные цифры вслух. Иначе договорённости нет."},
+  {t:"ask",who:"both",sec:180,q:"Домашние дела: не «кто больше делает», а «что каждый считает справедливым».",hint:"Скажите свою версию справедливого распределения. Сравните."},
+  {t:"ask",who:"each",sec:120,q:"Когда ты последний раз отдыхал{|а} без чувства вины?",hint:"Что нужно, чтобы такой отдых был у тебя раз в неделю?"},
+  {t:"seal"}]},
+
+{ title:"Дети: безопасность и наследство", sub:"Правила на будущее и то, что мы не берём с собой",
+  why:"Первая часть — только правила, прошлое не разбираем. Вторая — про то, что из детства каждого мы не понесём дальше.",
+  steps:[
+  {t:"say",text:"Часть первая. Безопасность. Прошлое не обсуждаем — только договорённости на будущее."},
+  {t:"ask",who:"both",sec:180,q:"Что для нас обязательно в вопросах безопасности детей?",hint:"Назовите список вслух, пункт за пунктом."},
+  {t:"ask",who:"both",sec:120,q:"В каких ситуациях звоним друг другу немедленно — в любое время и что бы ни происходило?"},
+  {t:"ask",who:"both",sec:120,q:"В каких ситуациях едем в больницу сразу, не обсуждая и ни с кем не советуясь?"},
+  {t:"ask",who:"both",sec:150,q:"Кому мы доверяем детей и на каких условиях?",hint:"Что этот человек обязан знать и что обязан делать."},
+  {t:"ask",who:"both",sec:120,q:"Что для нас категорически неприемлемо в обращении с детьми — кем бы этот человек ни был?"},
+  {t:"say",text:"Часть вторая. Наследство. Теперь каждый говорит о своём детстве."},
+  {t:"ask",who:"each",sec:150,q:"Закончи фразу: <em>в моей семье мне было больно, когда…</em>"},
+  {t:"ask",who:"each",sec:120,q:"Закончи фразу: <em>я не хочу, чтобы наши дети переживали…</em>"},
+  {t:"ask",who:"both",sec:150,q:"Чему мы хотим научить наших детей?",hint:"Три вещи, по которым потом можно будет проверить самих себя."},
+  {t:"ask",who:"both",sec:150,q:"Что чувствуют наши дети, когда мы ссоримся — и что мы меняем начиная с этой недели?"},
+  {t:"seal"}]},
+
+{ title:"Куда мы идём", sub:"Две картинки будущего, нарисованные отдельно",
+  why:"Сначала каждый рисует свою картинку — отдельно и не подглядывая. Потом сравниваете. Расхождения здесь ценнее совпадений.",
+  steps:[
+  {t:"ask",who:"each",sec:240,q:"Опиши наш обычный день через пять лет. С утра до вечера.",hint:"Где мы живём? Какая атмосфера дома? Что чувствуют дети? Что чувствуешь ты? Что чувствую я? Не торопись, говори подробно."},
+  {t:"ask",who:"both",sec:180,q:"Сравните. Что в ваших картинках совпало? Что разошлось?",hint:"Расхождение — не проблема. Это ваш список тем на будущее."},
+  {t:"ask",who:"both",sec:120,q:"Как мы отдыхаем через пять лет? Как часто и с кем?"},
+  {t:"ask",who:"both",sec:120,q:"Что мы делаем вдвоём — только вдвоём, без детей и без родни?"},
+  {t:"ask",who:"each",sec:150,q:"О чём ты мечтаешь лично для себя?",hint:"Не для семьи. Для себя."},
+  {t:"ask",who:"each",sec:120,q:"Что должно случиться в ближайший год, чтобы эта картинка стала реальной?"},
+  {t:"seal"}]},
+
+{ title:"Наши договорённости", sub:"Только «я готов», ни одного «ты должен»",
+  why:"Ничего не записываем. Поэтому всё, о чём договоритесь, нужно произнести вслух — коротко и конкретно.",
+  steps:[
+  {t:"ask",who:"each",sec:180,q:"Что <em>я готов{|а}</em> изменить? Три вещи.",hint:"Ни одного «ты должен». Например: я готов чаще спрашивать твоё мнение. Я готов поддерживать тебя перед роднёй. Я готова говорить сразу, а не копить обиду."},
+  {t:"ask",who:"both",sec:180,q:"Какие традиции мы создаём сами? Не у родителей, не в церкви — наши.",hint:"Прогулка всей семьёй · свидание раз в неделю · вечер настольных игр · молитва только своей семьёй · отпуск только вдвоём. Выберите три."},
+  {t:"ask",who:"both",sec:210,q:"Что мы пробуем в ближайшие три месяца?",hint:"Небольшое и проверяемое. Раз в неделю семейный совет · месяц без обсуждения родни за спиной · свидание без детей · съездить в другую церковь · посмотреть вариант отдельного жилья. Выберите три."},
+  {t:"ask",who:"both",sec:60,q:"Назовите дату следующего разговора. Вслух — день и время."},
+  {t:"ask",who:"both",sec:120,q:"Повторите вслух по очереди три главные договорённости сегодняшнего дня.",hint:"Мы ничего не записывали. Запомнится только то, что прозвучало дважды."},
+  {t:"ask",who:"each",sec:90,q:"И последнее. Закончи фразу: <em>спасибо тебе за то, что…</em>"}]},
+
+/* ══════════════ ДОПОЛНИТЕЛЬНЫЕ ТЕМЫ ══════════════
+   Не обязательные. Идут от лёгких к самым тяжёлым.
+   ═════════════════════════════════════════════════ */
+
+{ extra:true, title:"Чем мы смеёмся", sub:"Осталось ли что-то общее, кроме обязанностей",
+  why:"Лёгкая тема — с неё стоит начинать дополнительные разговоры. Она напоминает, что вы не только родители и не только обязанности.",
+  steps:[
+  {t:"ask",who:"each",sec:90,q:"Над чем мы смеялись вместе в последний раз?",hint:"Вспомни конкретный случай. Если не вспоминается — так и скажи, это тоже ответ."},
+  {t:"ask",who:"each",sec:120,q:"Что во мне тебя до сих пор радует?",hint:"Не достоинство из списка. Именно то, от чего тебе тепло."},
+  {t:"ask",who:"each",sec:120,q:"Чем бы ты {хотел|хотела} заняться вдвоём, но никогда не {предлагал|предлагала}?",hint:"Потому что казалось глупым, дорогим или не ко времени. Скажи вслух."},
+  {t:"ask",who:"each",sec:120,q:"Какое у нас было самое хорошее время? Что тогда было, чего нет сейчас?"},
+  {t:"ask",who:"both",sec:150,q:"Что из этого можно вернуть в ближайший месяц?",hint:"Одна вещь и дата. Не список намерений."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Своя жизнь и свои люди", sub:"Право на друзей, время и тишину",
+  why:"Одиночество в браке чаще всего не от того, что второй плохой. А от того, что у человека не осталось ничего своего.",
+  steps:[
+  {t:"ask",who:"each",sec:120,q:"Есть ли у тебя друг вне нашей семьи и вне церкви?",hint:"Человек, которому можно позвонить просто так. Если такого нет — скажи прямо."},
+  {t:"ask",who:"each",sec:120,q:"Когда ты последний раз {проводил|проводила} вечер так, как {хотел|хотела} {сам|сама}?",hint:"Что мешает этому повторяться?"},
+  {t:"ask",who:"each",sec:150,after:"mirror",q:"Что тебе нужно из своего: время, дело, тишина, друзья?",hint:"Скажи прямо — сколько и как часто. Не «иногда бы», а конкретно."},
+  {t:"ask",who:"each",sec:120,q:"Что тебя тревожит, когда я провожу время без тебя?",hint:"Говори про свой страх, а не про мои ошибки."},
+  {t:"ask",who:"both",sec:150,q:"Сколько своего времени есть у каждого в неделю и как мы друг друга прикрываем?",hint:"Назовите день и часы вслух. Иначе это опять останется намерением."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Телефоны и внимание", sub:"Кто присутствует, но отсутствует",
+  why:"Короткая тема. Она про то, сколько внимания реально достаётся друг другу, а не про то, кто больше виноват.",
+  steps:[
+  {t:"ask",who:"each",sec:90,q:"В какие моменты ты чувствуешь, что я рядом, но меня нет?"},
+  {t:"ask",who:"each",sec:90,q:"Сколько вечера у тебя уходит в экран? Назови честную цифру."},
+  {t:"ask",who:"each",sec:120,q:"Есть ли в твоём телефоне что-то, чего ты не {хотел|хотела} бы мне показать?",hint:"Не что именно — а есть ли вообще. Ответ «да» здесь не обвинение: он про то, где у нас проходит граница личного."},
+  {t:"ask",who:"both",sec:150,q:"Договоритесь о двух правилах: когда телефоны убираются совсем — и что мы делаем в это время.",hint:"Например: за столом и первый час после того, как уснули дети."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Кому мы можем позвонить", sub:"Есть ли у нас кто-то, кроме родителей и церкви",
+  why:"Изоляция — то, что делает давление родни неотразимым. Если позвонить некому, любое чужое мнение весит слишком много.",
+  steps:[
+  {t:"ask",who:"each",sec:120,q:"Назови трёх человек, которым ты можешь позвонить в тяжёлый момент.",hint:"Если их меньше трёх — так и скажи. Это важный ответ, а не провал."},
+  {t:"ask",who:"each",sec:100,q:"Кто из них наш общий, а кто только твой?"},
+  {t:"ask",who:"each",sec:120,q:"Есть ли человек, чьё мнение о нашей семье весит больше, чем должно?",hint:"Имя называть не обязательно. Скажи хотя бы, есть ли такой."},
+  {t:"ask",who:"both",sec:150,q:"Кому мы можем сказать «нам сейчас тяжело» и не бояться, что это разнесут?",hint:"Если такого человека нет — это первая задача на ближайший год."},
+  {t:"ask",who:"both",sec:150,q:"Нужен ли нам кто-то третий — семейный психолог, наставник, врач?",hint:"Скажите каждый вслух: да, нет или не знаю. И почему."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Усталость и здоровье", sub:"Как мы замечаем, что второй на пределе",
+  why:"В верующих семьях выгорание часто называют маловерием или ленью. Из-за этого человек молчит, пока не сломается.",
+  steps:[
+  {t:"ask",who:"each",sec:120,q:"По каким признакам видно, что ты на пределе?",hint:"Что ты делаешь, что говоришь, как выглядишь. Скажи так, чтобы второй мог это заметить со стороны."},
+  {t:"ask",who:"each",sec:120,q:"Что тебе помогает восстановиться — и что не помогает, хотя все советуют?"},
+  {t:"ask",who:"each",sec:150,after:"mirror",q:"Когда тебе было по-настоящему плохо, ты {сказал|сказала} мне об этом?",hint:"Если нет — почему? Чего ты {ждал|ждала} в ответ и боялся не получить?"},
+  {t:"ask",who:"both",sec:180,q:"Что мы делаем, когда один болен или выгорел?",hint:"Кто берёт детей, быт, деньги. Опишите порядок действий, а не намерения."},
+  {t:"ask",who:"both",sec:150,q:"Считаем ли мы, что за помощью можно идти к врачу и к психологу?",hint:"Скажите каждый своё мнение вслух. Расхождение здесь стоит знать заранее."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Работа и дело каждого", sub:"Право на своё дело, учёбу и доход",
+  why:"Тема девятая была про справедливость в быту. Эта — про право каждого на своё дело и про то, чья работа кому уступает.",
+  steps:[
+  {t:"ask",who:"each",sec:150,q:"Чем ты {хотел|хотела} бы заниматься, если бы это было возможно?",hint:"Не мечта вообще, а работа или дело. Назови конкретно."},
+  {t:"ask",who:"each",sec:120,q:"Что мешает сейчас — время, деньги, дети, чужое мнение? Назови главное."},
+  {t:"ask",who:"each",sec:120,q:"Есть ли у тебя право учиться или начать что-то новое?",hint:"Ты {сам|сама} так считаешь — или тебе так говорят?"},
+  {t:"ask",who:"both",sec:180,q:"Чья работа кому уступает, если они сталкиваются?",hint:"Есть ли у нас правило — или каждый раз побеждает тот, кто настойчивее?"},
+  {t:"ask",who:"both",sec:150,q:"Влияет ли на решения то, кто сколько зарабатывает? Скажите честно.",hint:"Если да — это не стыдно. Стыдно делать вид, что не влияет."},
+  {t:"ask",who:"both",sec:150,q:"Что должно измениться за год, чтобы у каждого было своё дело?"},
+  {t:"seal"}]},
+
+{ extra:true, title:"Мы как родители, а не два родителя", sub:"Союзники мы или каждый воспитывает сам",
+  why:"Тема десятая была про безопасность и про то, что мы не берём из своего детства. Эта — про то, поддерживаем ли мы друг друга при детях.",
+  steps:[
+  {t:"ask",who:"each",sec:120,q:"Когда ты {чувствовал|чувствовала}, что я не {поддержал|поддержала} тебя при детях?",hint:"Один случай. Без разбора, кто был прав."},
+  {t:"ask",who:"each",sec:120,q:"Что для тебя недопустимо в обращении с детьми? Три вещи."},
+  {t:"ask",who:"each",sec:120,after:"mirror",q:"Наказания. Что ты считаешь допустимым, а что нет?",hint:"Скажи прямо, даже если знаешь, что второй не согласится."},
+  {t:"ask",who:"both",sec:180,q:"Если один уже что-то решил или запретил — что делает второй?",hint:"Договоритесь: при детях не спорим, спорим потом наедине. Или своя версия — но одна на двоих."},
+  {t:"ask",who:"both",sec:150,q:"Кто может отменить решение второго и в каком единственном случае?"},
+  {t:"ask",who:"both",sec:150,q:"Что видит наш ребёнок, когда смотрит на нас двоих?",hint:"Ответьте честно — и скажите, что меняем с этой недели."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Большие решения", sub:"Переезд, работа, ещё один ребёнок",
+  why:"Пока нет правила, как принимать то, что нельзя отменить, решает тот, кто настойчивее. А второй потом молчит годами.",
+  steps:[
+  {t:"ask",who:"each",sec:150,q:"Какое решение мы приняли не сами, а под давлением? Как ты это {понял|поняла}?"},
+  {t:"ask",who:"each",sec:150,after:"mirror",q:"Есть ли решение, которое ты хочешь, но боишься даже предложить?",hint:"Переезд, смена работы, ещё ребёнок, отдельное жильё. Скажи вслух — сегодня за это ничего не будет."},
+  {t:"ask",who:"both",sec:180,q:"Право вето: на что оно есть у каждого? Назовите по два пункта.",hint:"Вето — это не «я против», это «я не соглашусь никогда». Таких пунктов не может быть много."},
+  {t:"ask",who:"both",sec:180,q:"Что мы делаем, когда один очень хочет, а второй не готов?",hint:"Ждём — и сколько? Пробуем маленький шаг? Отказываемся совсем? Выберите один порядок действий."},
+  {t:"ask",who:"both",sec:180,q:"Переезд. Скажите каждый вслух: да, нет или не знаю.",hint:"И главное — что должно случиться, чтобы твой ответ изменился."},
+  {t:"ask",who:"both",sec:150,q:"Какое решение мы обязаны принять в ближайший год? Назовите дату, когда вернёмся к нему."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Вера — у каждого своя", sub:"Во что я верю сам, а не потому что принято",
+  warn:"Лучше после темы 8 — и только если оба готовы говорить честно.",
+  why:"Тема восьмая была про правила и традиции. Эта — про саму веру. Здесь никто никого не проверяет и не поправляет.",
+  steps:[
+  {t:"say",text:"Правило на сегодня: слушающий не поправляет, не цитирует и не спорит. Даже если очень хочется. Сегодня вы не выясняете, кто прав."},
+  {t:"ask",who:"each",sec:180,q:"Во что ты веришь {сам|сама}? Скажи своими словами, не цитатами."},
+  {t:"ask",who:"each",sec:150,after:"mirror",q:"В чём ты сомневаешься — и кому не можешь об этом сказать?"},
+  {t:"ask",who:"each",sec:150,q:"Ты ходишь в церковь, потому что хочешь — или потому что этого ждут?",hint:"Ответь честно. Второй молчит и не реагирует лицом."},
+  {t:"ask",who:"each",sec:120,q:"Что в церковной жизни даёт тебе силы, а что забирает?"},
+  {t:"ask",who:"each",sec:150,q:"Что будет с нами, если один из нас изменится в вере? Что ты сделаешь?",hint:"Это не угроза и не признание. Это вопрос о том, выдержит ли наш брак разницу."},
+  {t:"ask",who:"both",sec:150,q:"Какая вера будет в нашей семье — не в родительской и не в церковной, а в нашей?",hint:"Что мы делаем вдвоём и что делаем с детьми. Конкретно."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Близость", sub:"Разговор, которого не было",
+  warn:"Не берите раньше тем 3, 5 и 6 — нужны правила ссоры и общий язык про любовь.",
+  why:"Самая молчаливая тема в браке. Здесь нет обвинений и нет долга. Есть только то, что каждому хорошо и что каждому тяжело.",
+  steps:[
+  {t:"say",text:"Правила на сегодня. Никто никому ничего не должен. Никаких сравнений и никакого «а вот раньше». Если стало невыносимо — говорим «пауза» и заканчиваем на сегодня, без объяснений."},
+  {t:"ask",who:"each",sec:150,after:"mirror",q:"Что для тебя близость — про что она вообще?",hint:"Про тело, про то, что тебя выбрали, про покой, про что-то ещё? Скажи своими словами."},
+  {t:"ask",who:"each",sec:150,q:"Что тебе хорошо — и о чём ты никогда не {говорил|говорила}?",hint:"Можно медленно. Можно неполно. Главное — вслух."},
+  {t:"ask",who:"each",sec:120,q:"Как ты понимаешь, что мне сейчас не до этого? По каким признакам?"},
+  {t:"ask",who:"each",sec:150,q:"Как сказать «нет» так, чтобы второй не почувствовал себя отвергнутым?",hint:"Скажи именно теми словами, которыми хочешь это слышать."},
+  {t:"ask",who:"each",sec:150,q:"Что изменилось после родов и после тяжёлых периодов?",hint:"О чём мы тогда так и не поговорили?"},
+  {t:"ask",who:"each",sec:120,q:"Кто из нас чаще предлагает? Как это ощущается — как желание или как проверка?"},
+  {t:"ask",who:"both",sec:180,q:"Что мы меняем: сколько времени, какие условия, о чём договариваемся заранее.",hint:"Договорённость должна быть конкретной, иначе это опять разговор ни о чём."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Одна незакрытая история", sub:"Один рассказывает — второй только слушает",
+  warn:"Только после тем 3, 5 и 6. По одной истории от каждого — не список.",
+  why:"Здесь разбирается ровно одна старая история от каждого. Задача не выяснить, кто был прав, а дать ей наконец быть услышанной.",
+  steps:[
+  {t:"say",text:"Порядок жёсткий. Рассказывает один — второй молчит до самого конца, а потом пересказывает своими словами. И всё. Никаких «на самом деле было не так». Потом меняетесь."},
+  {t:"ask",who:"each",sec:240,after:"mirror",afterSec:150,q:"Расскажи одну историю, которая до сих пор болит.",hint:"Что происходило и что ты {чувствовал|чувствовала}. Только про себя: не «ты тогда», а «мне было»."},
+  {t:"ask",who:"each",sec:120,q:"Скажи, что тебе нужно от меня сейчас: чтобы я {извинился|извинилась}, чтобы я {понял|поняла} — или просто чтобы знал.",hint:"Многим нужно третье, а просят первое."},
+  {t:"ask",who:"each",sec:150,q:"Есть ли что-то, что ты можешь сделать, чтобы это перестало возвращаться?"},
+  {t:"seal"}]},
+
+{ extra:true, title:"Если с одним что-то случится", sub:"Неприятно и практично",
+  why:"Полчаса неловкости сейчас избавляют второго от беспомощности потом.",
+  steps:[
+  {t:"ask",who:"each",sec:150,q:"Если тебя не станет — с кем останутся дети и почему именно с ними?",hint:"Отвечают оба. Если ответы разошлись — это и есть работа на сегодня."},
+  {t:"ask",who:"each",sec:150,q:"Назови три вещи, которых второй про наши дела не знает.",hint:"Документы, счета, пароли, долги, договорённости. Проверьте друг друга вслух."},
+  {t:"ask",who:"each",sec:120,q:"Если ты тяжело заболеешь — чего ты хочешь и чего точно не хочешь?"},
+  {t:"ask",who:"each",sec:120,q:"Что ты хочешь, чтобы дети знали о тебе, если ты не успеешь рассказать {сам|сама}?"},
+  {t:"ask",who:"both",sec:180,q:"Что мы сделаем в ближайший месяц, чтобы второй не остался беспомощным?",hint:"Три конкретных дела и дата. Не «надо бы разобраться»."},
+  {t:"seal"}]},
+
+{ extra:true, title:"Красные линии", sub:"Что несовместимо с браком и что делаем, если станет плохо",
+  warn:"Берите последней, когда пройдено всё остальное. Не в ссоре и не после ссоры.",
+  why:"Самая тяжёлая тема, поэтому она последняя. Договорённость на холодную голову — то, что не даёт разрушить всё за один вечер на эмоциях.",
+  steps:[
+  {t:"say",text:"Правило: сегодня никто никого не обвиняет и никто ничего не объявляет. Мы описываем границы и порядок действий заранее — как страховку, а не как ультиматум."},
+  {t:"ask",who:"each",sec:150,after:"mirror",q:"Что для тебя несовместимо с браком? Назови прямо.",hint:"Насилие, измена, зависимость, что-то ещё. Говори про принцип, а не про случай."},
+  {t:"ask",who:"each",sec:150,q:"Было ли что-то, после чего ты {думал|думала} уйти?",hint:"Не рассказывай подробностей. Скажи, было или нет — и что тебя удержало."},
+  {t:"ask",who:"each",sec:150,q:"Как ты отличаешь «нам тяжело» от «нам конец»? По каким признакам?"},
+  {t:"ask",who:"both",sec:180,q:"Порядок действий, если один захочет уйти: с кем говорим первым, что пробуем до решения, сколько времени даём себе.",hint:"Это самая важная договорённость сегодняшнего вечера. Проговорите её дважды."},
+  {t:"ask",who:"both",sec:150,q:"Что каждый обещает не делать в ссоре — никогда?",hint:"Не уходить из дома молча. Не говорить слово «развод» как аргумент. Не втягивать родителей. Выберите свои."},
+  {t:"ask",who:"both",sec:150,q:"Кому мы позвоним, если станет по-настоящему плохо? Назовите имя и телефон вслух."},
+  {t:"seal"}]}
+];
+
+/* ══════════════════════════════════════════════
+   СОСТОЯНИЕ
+   ══════════════════════════════════════════════ */
+const MAIN = TOPICS.findIndex(t => t.extra);   // основной курс — темы до этого номера
+const isExtra = i => i >= MAIN;
+const LABEL = {he:"говорит муж", she:"говорит жена", both:"говорите вместе"};
+const $ = s => document.querySelector(s);
+
+const S = {
+  auto:true, voice:false,                    // настройки
+  cards:[], i:0, topic:0,                    // позиция
+  left:0, total:0, running:false, tick:null  // таймер
+};
+// хранилище может быть недоступно (приватный режим, iframe) — молча живём без него
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k) || "{}"); }catch(e){ return {}; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+Object.assign(S, store.get("razgovor-set"));
+let progress = store.get("razgovor-progress");
+const saveSet = () => store.set("razgovor-set", {auto:S.auto, voice:S.voice});
+
+/* ── пауза на чтение ──────────────────────── */
+// Приложение молчит. Вопрос читает вслух один из вас.
+// Здесь только выдержка времени, чтобы карточка не проскакивала.
+let dwellSeq = 0;
+function dwell(text, done){
+  const my = ++dwellSeq;
+  const chars = String(text || "").replace(/<[^>]+>/g, "").length;
+  const wait = text ? Math.min(24000, Math.max(4000, chars * 65)) : 400;
+  if(done) setTimeout(()=>{ if(my === dwellSeq) done(); }, wait);
+}
+function cancelDwell(){ dwellSeq++; }
+
+/* ── сигнал «время вышло» — беззвучный ─────── */
+function flash(){
+  const d = $("#dial");
+  d.classList.remove("over"); void d.offsetWidth; d.classList.add("over");
+  setTimeout(()=> d.classList.remove("over"), 2600);
+}
+
+/* ── экран не гаснет ──────────────────────── */
+let wl = null;
+async function keepAwake(on){
+  try{
+    if(on && "wakeLock" in navigator && !wl){ wl = await navigator.wakeLock.request("screen"); wl.onrelease = ()=>{ wl=null; }; }
+    else if(!on && wl){ await wl.release(); wl = null; }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible" && $("#session").classList.contains("on")) keepAwake(true);
+});
+
+/* ══════════════════════════════════════════════
+   СБОРКА КАРТОЧЕК
+   ══════════════════════════════════════════════ */
+function gender(text, sp){
+  return String(text).replace(/\{([^{}|]*)\|([^{}|]*)\}/g, (_,a,b)=> sp==="she" ? b : a);
+}
+function buildTopic(ti){
+  const T = TOPICS[ti], cards = [];
+  const first = ti % 2 === 0 ? "he" : "she";
+  const second = first === "he" ? "she" : "he";
+  cards.push({kind:"intro", ti});
+  T.steps.forEach(s=>{
+    if(s.t === "say"){ cards.push({kind:"say", ti, text:s.text}); }
+    else if(s.t === "ask"){
+      const who = s.who === "each" ? [first, second] : [s.who];
+      who.forEach(sp => {
+        cards.push({kind:"ask", ti, sp, q:s.q, hint:s.hint, sec:s.sec||120});
+        // ответная реплика идёт сразу после каждого — чтобы отвечали оба, а не один
+        if(s.after && sp !== "both")
+          cards.push({kind:s.after, ti, sp: sp === "he" ? "she" : "he", sec:s.afterSec||90});
+      });
+    }
+    else if(s.t === "mirror"){ cards.push({kind:"mirror", ti, sec:s.sec||90}); }
+    else if(s.t === "check"){ cards.push({kind:"check", ti, sec:s.sec||120}); }
+    else if(s.t === "seal"){ cards.push({kind:"seal", ti, sec:60}); }
+  });
+  cards.push({kind:"end", ti});
+  return cards;
+}
+function topicMinutes(ti){
+  return Math.round(buildTopic(ti).reduce((a,c)=> a + (c.sec||0) + 12, 0) / 60);
+}
+
+/* ══════════════════════════════════════════════
+   ЭКРАНЫ
+   ══════════════════════════════════════════════ */
+function show(id){
+  document.querySelectorAll(".screen").forEach(s=> s.classList.toggle("on", s.id === id));
+}
+// чья очередь: цвет карточки, значки игроков и наклон, с которого она въезжает
+function setTurn(sp){
+  document.documentElement.style.setProperty("--now",
+    sp === "he" ? "var(--he)" : sp === "she" ? "var(--she)" : "var(--both)");
+  $("#pHe").classList.toggle("on", sp === "he" || sp === "both");
+  $("#pShe").classList.toggle("on", sp === "she" || sp === "both");
+  const st = $("#stage");
+  if(sp === "both") st.removeAttribute("data-side"); else st.setAttribute("data-side", sp);
+}
+function renderPips(){
+  const n = S.cards.length - 1;               // последняя карточка — служебная
+  $("#pips").innerHTML = Array.from({length:n},
+    (_,k)=> `<i class="${k < S.i ? "past" : k === S.i ? "now" : ""}"></i>`).join("");
+}
+
+/* ── главная ──────────────────────────────── */
+function renderHome(){
+  const main = $("#topicList"), extra = $("#extraList");
+  main.innerHTML = ""; extra.innerHTML = "";
+  TOPICS.forEach((T, i)=>{
+    const b = document.createElement("button");
+    b.className = "topic" + (T.extra ? " extra" : "") + (progress.done && progress.done[i] ? " done" : "");
+    b.innerHTML = `<span class="n">${T.extra ? i - MAIN + 1 : i + 1}</span>
+      <span class="t">${T.title}<span class="s">${T.sub}</span>
+        <span class="m">${topicMinutes(i)} мин</span>${T.warn ? '<span class="m flag">сначала основные</span>' : ""}</span>`;
+    b.onclick = ()=> startTopic(i);
+    (T.extra ? extra : main).appendChild(b);
+  });
+  $("#goResume").hidden = !(progress.next > 0 && progress.next < MAIN);
+  if(progress.next > 0) $("#goResume").textContent = "Продолжить: тема " + (progress.next + 1);
+  syncChips();
+}
+function syncChips(){
+  $("#tgAuto").setAttribute("aria-pressed", String(S.auto));
+  $("#tgAuto").querySelector("span").textContent = S.auto ? "Без рук: сам переключается" : "Вручную: переключаю сам";
+  $("#tgVoice").setAttribute("aria-pressed", String(S.voice));
+}
+function renderRules(){
+  const w = $("#rulesList");
+  w.innerHTML = RULES.map((r,i)=> `<div class="rule"><b>${i+1}</b><p>${r}</p></div>`).join("");
+}
+
+/* ── запуск ───────────────────────────────── */
+function startTopic(ti){
+  S.topic = ti; S.cards = buildTopic(ti); S.i = 0;
+  show("session"); keepAwake(true); render();
+}
+function startFlow(){
+  startTopic(Math.min(progress.next || 0, MAIN - 1));
+}
+
+/* ── рендер карточки ──────────────────────── */
+function lastSpeakerBefore(i){
+  for(let k = i - 1; k >= 0; k--) if(S.cards[k].kind === "ask" && S.cards[k].sp !== "both") return S.cards[k].sp;
+  return "he";
+}
+function render(){
+  stopTimer();
+  const c = S.cards[S.i];
+  if(!c) return;
+  const T = TOPICS[c.ti];
+  $("#crumb").textContent = isExtra(c.ti) ? `доп. ${c.ti - MAIN + 1} · ${T.title}` : `${c.ti+1} / ${MAIN} · ${T.title}`;
+  const box = $("#stageIn");
+  const qEl = $("#question"), hEl = $("#hint"), wEl = $("#who");
+
+  let readAloud = "", sp = "both", showTimer = true;
+  box.classList.remove("wide");
+
+  if(c.kind === "intro"){
+    sp = "both"; showTimer = false;
+    wEl.textContent = `около ${topicMinutes(c.ti)} минут`;   // «доп.» уже видно в шапке
+    qEl.innerHTML = T.title;
+    hEl.innerHTML = T.why + (T.warn ? `<b class="flag-note">${T.warn}</b>` : "");
+    box.classList.add("wide");
+    readAloud = T.title + ". " + T.why + (T.warn || "");
+  }
+  else if(c.kind === "say"){
+    sp = "both"; showTimer = false;
+    wEl.textContent = "оба слушают";
+    qEl.innerHTML = c.text;
+    hEl.textContent = "";
+    box.classList.add("wide");
+    readAloud = c.text;
+  }
+  else if(c.kind === "ask"){
+    sp = c.sp;
+    wEl.textContent = LABEL[sp];
+    qEl.innerHTML = gender(c.q, sp);
+    hEl.textContent = c.hint ? gender(c.hint, sp) : "";
+  }
+  else if(c.kind === "mirror"){
+    sp = c.sp || (lastSpeakerBefore(S.i) === "he" ? "she" : "he");
+    wEl.textContent = sp === "he" ? "пересказывает муж" : "пересказывает жена";
+    qEl.innerHTML = gender("Повтори своими словами, что ты <em>услышал{|а}</em>.", sp);
+    hEl.textContent = gender("Начни со слов: «я услышал{|а}, что для тебя важно…». Не спорь и не объясняй. Просто перескажи. Второй скажет, точно ли ты понял{|а}.", sp);
+  }
+  else if(c.kind === "check"){
+    sp = c.sp || "both";
+    wEl.textContent = sp === "he" ? "отвечает муж" : sp === "she" ? "отвечает жена" : "проверка";
+    qEl.innerHTML = "По каждому пункту скажи: <em>«да, это правда»</em> или <em>«нет, ты меня не понял»</em>.";
+    hEl.textContent = "Без объяснений и без спора. Только да или нет — объяснения потом.";
+  }
+  else if(c.kind === "seal"){
+    sp = "both";
+    wEl.textContent = "закрепляем";
+    qEl.innerHTML = "Скажите вслух одну вещь, о которой вы <em>сейчас договорились</em>.";
+    hEl.textContent = "Одно предложение. Мы ничего не записываем — значит, это должно прозвучать.";
+  }
+  else if(c.kind === "end"){
+    finishTopic(c.ti); return;
+  }
+
+  setTurn(sp);
+  renderPips();
+  box.style.animation = "none"; void box.offsetWidth; box.style.animation = "";  // раздать карточку заново
+
+  cancelDwell();
+  if(showTimer && c.sec){
+    // вопрос читает вслух один из вас — время идёт сразу
+    S.total = c.sec; S.left = c.sec; $("#run").style.opacity = ""; paintTimer();
+    startTimer();
+  } else {
+    S.total = 0; S.left = 0;
+    $("#time").textContent = "▸";                   // без таймера — просто «дальше»
+    $("#dialLbl").textContent = "дальше";
+    $("#run").style.opacity = "0";   // без таймера кольца нет вовсе
+    dwell(readAloud, ()=>{ if(S.auto) next(); });   // даём прочитать, потом сами дальше
+  }
+}
+
+/* ── таймер ───────────────────────────────── */
+const C = 2 * Math.PI * 52;      // радиус кольца в разметке — r="52"
+function paintTimer(){
+  const m = Math.floor(S.left / 60), s = S.left % 60;
+  $("#time").textContent = S.total ? `${m}:${String(s).padStart(2,"0")}` : "▸";
+  const f = S.total ? S.left / S.total : 0;
+  $("#run").style.strokeDasharray = `${C} ${C}`;
+  $("#run").style.strokeDashoffset = String(C * (1 - f));
+}
+function startTimer(){
+  stopTimer();
+  if(!S.total) return;
+  S.running = true; $("#dial").classList.remove("paused"); $("#dialLbl").textContent = "пауза";
+  S.tick = setInterval(()=>{
+    S.left--; paintTimer();
+    if(S.left <= 0){ stopTimer(); flash(); $("#dialLbl").textContent = "время вышло"; if(S.auto) setTimeout(next, 2200); }
+  }, 1000);
+}
+function stopTimer(){ clearInterval(S.tick); S.tick = null; S.running = false; }
+function togglePause(){
+  if(!S.total){ next(); return; }
+  if(S.running){ stopTimer(); $("#dial").classList.add("paused"); $("#dialLbl").textContent = "продолжить"; }
+  else { startTimer(); }
+}
+
+/* ── навигация ────────────────────────────── */
+function next(){ cancelDwell(); if(S.i < S.cards.length - 1){ S.i++; render(); } }
+function prev(){ cancelDwell(); if(S.i > 0){ S.i--; render(); } }
+function repeat(){ cancelDwell(); render(); }
+function exitSession(){
+  cancelDwell(); stopTimer(); keepAwake(false); listen(false);
+  show("home"); renderHome();
+}
+function finishTopic(ti){
+  stopTimer(); cancelDwell();
+  progress.done = progress.done || {};
+  progress.done[ti] = true;
+  if(!isExtra(ti)) progress.next = Math.min(ti + 1, MAIN - 1);   // доп. темы не двигают основной курс
+  store.set("razgovor-progress", progress);
+  setTurn("both");
+  const courseDone = ti === MAIN - 1;                            // пройден основной курс
+  const hasNext = ti + 1 < TOPICS.length;
+  $("#doneEyebrow").textContent = courseDone ? "все двенадцать тем пройдены"
+    : isExtra(ti) ? "дополнительная тема пройдена" : "тема пройдена";
+  $("#doneTitle").innerHTML = courseDone
+    ? "Вы прошли <em>весь основной курс</em>."
+    : `«${TOPICS[ti].title}» — <em>закрыто</em>.`;
+  $("#doneText").textContent = courseDone
+    ? "Ниже в списке есть тринадцать дополнительных тем — берите те, что стали важны именно сейчас. И вернитесь к основным через месяц: проверить, что из сказанного стало делом."
+    : "Хватит на сегодня. Следующую тему лучше взять в другой день — не подряд. Договоритесь о дате сейчас, вслух.";
+  $("#doneNext").hidden = !hasNext;
+  $("#doneNext").textContent = isExtra(ti + 1) && !isExtra(ti) ? "К дополнительным" : "Следующая тема";
+  show("done"); keepAwake(false); listen(false);
+}
+
+/* ── голосовые команды ────────────────────── */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+function listen(on){
+  if(!SR || !S.voice){ if(rec){ try{rec.stop();}catch(e){} rec=null; } $("#micHint").hidden = true; return; }
+  if(on && !rec){
+    rec = new SR();
+    rec.lang = "ru-RU"; rec.continuous = true; rec.interimResults = false;
+    rec.onresult = e=>{
+      const r = e.results[e.results.length-1];
+      if(!r.isFinal) return;
+      const t = r[0].transcript.trim().toLowerCase().replace(/[.,!?]/g,"");
+      if(t.split(/\s+/).length > 3) return;           // длинную речь не трогаем
+      if(/^(дальше|далее|следующий|следующая|поехали|готово)$/.test(t)) next();
+      else if(/^(назад|обратно|предыдущий)$/.test(t)) prev();
+      else if(/^(повтори|повтори ещё раз|ещё раз|повторить)$/.test(t)) repeat();
+      else if(/^(пауза|стоп|подожди)$/.test(t)){ if(S.running) togglePause(); }
+      else if(/^(продолжай|продолжить|дальше время)$/.test(t)){ if(!S.running) togglePause(); }
+    };
+    rec.onend = ()=>{ if(rec && S.voice && $("#session").classList.contains("on")){ try{ rec.start(); }catch(e){} } };
+    try{ rec.start(); }catch(e){}
+    $("#micHint").hidden = false;
+  }
+  if(!on && rec){ const r = rec; rec = null; try{ r.stop(); }catch(e){} $("#micHint").hidden = true; }
+}
+
+/* ══════════════════════════════════════════════
+   СОБЫТИЯ
+   ══════════════════════════════════════════════ */
+$("#goStart").onclick = ()=>{ renderRules(); show("rules"); };
+$("#goResume").onclick = ()=>{ startFlow(); };
+$("#goRules").onclick = ()=>{ renderRules(); show("rules"); };
+$("#rulesBack").onclick = ()=> show("home");
+$("#rulesOk").onclick = ()=>{ startFlow(); listen(true); };
+$("#tgAuto").onclick = ()=>{ S.auto = !S.auto; saveSet(); syncChips(); };
+$("#tgVoice").onclick = ()=>{ S.voice = !S.voice; saveSet(); syncChips(); listen($("#session").classList.contains("on")); };
+$("#btnExit").onclick = exitSession;
+$("#btnBack").onclick = prev;
+$("#btnNext").onclick = next;
+$("#btnRepeat").onclick = repeat;
+$("#dial").onclick = togglePause;
+$("#doneNext").onclick = ()=>{
+  const n = S.topic + 1;
+  if(isExtra(n) && !isExtra(S.topic)){ show("home"); renderHome(); }   // курс кончился — покажем список
+  else if(n < TOPICS.length) startTopic(n);
+};
+$("#doneHome").onclick = ()=>{ show("home"); renderHome(); };
+
+document.addEventListener("keydown", e=>{
+  if(!$("#session").classList.contains("on")) return;
+  if(e.key === "ArrowRight"){ e.preventDefault(); next(); }
+  else if(e.key === "ArrowLeft"){ e.preventDefault(); prev(); }
+  else if(e.key === " "){ e.preventDefault(); togglePause(); }
+  else if(e.key.toLowerCase() === "r" || e.key.toLowerCase() === "к"){ e.preventDefault(); repeat(); }
+  else if(e.key === "Escape"){ exitSession(); }
+});
+
+if(SR) $("#tgVoice").hidden = false;
+renderHome();
+</script>
+</body>
+</html>
